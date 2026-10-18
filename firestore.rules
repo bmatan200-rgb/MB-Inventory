@@ -1,0 +1,25 @@
+rules_version = '2';
+service cloud.firestore {
+ match /databases/{database}/documents {
+  function signed() { return request.auth != null; }
+  function owner() { return signed() && request.auth.uid == get(/databases/$(database)/documents/settings/accountOwner).data.uid; }
+  match /settings/accountOwner { allow read: if owner(); allow write: if false; }
+  match /customerAccounts/{uid} {
+   allow read: if owner() || (signed() && request.auth.uid == uid);
+   allow create: if signed() && request.auth.uid == uid
+    && request.resource.data.keys().hasAll(['uid','email','businessName','number','status','expiresAt','createdAt'])
+    && request.resource.data.keys().hasOnly(['uid','email','businessName','number','status','expiresAt','createdAt'])
+    && request.resource.data.uid == uid && request.resource.data.email == request.auth.token.email
+    && request.resource.data.businessName is string && request.resource.data.businessName.size() > 0 && request.resource.data.businessName.size() <= 100
+    && request.resource.data.number is string && request.resource.data.number.size() > 0 && request.resource.data.number.size() <= 24
+    && request.resource.data.status == 'pending' && request.resource.data.expiresAt == 0 && request.resource.data.createdAt == request.time;
+   allow update: if owner()
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','expiresAt','updatedAt'])
+    && request.resource.data.status in ['pending','active','blocked']
+    && request.resource.data.expiresAt is number && request.resource.data.expiresAt >= 0
+    && request.resource.data.updatedAt == request.time;
+   allow delete: if false;
+  }
+  match /{document=**} { allow read, write: if false; }
+ }
+}
