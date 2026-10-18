@@ -69,3 +69,6 @@
   .barcode-entry{padding:10px 13px}
 }
 @media(max-width:380px){.hero-copy{grid-template-columns:minmax(0,1fr) 94px}.hero-illustration{width:100px}.hero-copy h1{font-size:28px}.mode-choice span{font-size:8px}.count-mode-heading h2{font-size:14px}}
+
+/* Search spans the inventory toolbar after removing undo. */
+.list-toolbar{justify-content:flex-start}.list-toolbar input{width:100%;max-width:100%}
