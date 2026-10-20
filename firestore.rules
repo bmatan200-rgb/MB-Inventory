@@ -16,7 +16,7 @@ service cloud.firestore {
     && request.resource.data.countLimit == 1 && request.resource.data.countsUsed == 0 && request.resource.data.lastClaimId == ''
     && request.resource.data.createdAt == request.time;
    allow update: if (owner()
-    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','expiresAt','updatedAt','countLimit','countsUsed','lastClaimId','number'])
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','expiresAt','updatedAt','countLimit','countsUsed','lastClaimId','number','reopenClaimId','reopenToken','reopenGrantedAt'])
     && request.resource.data.status in ['pending','active','blocked']
     && request.resource.data.expiresAt is number && request.resource.data.expiresAt >= 0
     && request.resource.data.countLimit is int && request.resource.data.countLimit >= resource.data.get('countsUsed', 0)
@@ -25,6 +25,12 @@ service cloud.firestore {
     && request.resource.data.countsUsed <= request.resource.data.countLimit
     && request.resource.data.lastClaimId == resource.data.get('lastClaimId', '')
     && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['number']) || (request.resource.data.number is string && request.resource.data.number.size() == 0))
+    && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['reopenClaimId','reopenToken','reopenGrantedAt']) || (
+      request.resource.data.reopenClaimId == resource.data.lastClaimId
+      && request.resource.data.reopenGrantedAt == request.time
+      && request.resource.data.reopenToken is string
+      && request.resource.data.reopenToken.size() > 0 && request.resource.data.reopenToken.size() <= 100
+      && exists(/databases/$(database)/documents/customerAccounts/$(uid)/countClaims/$(request.resource.data.reopenClaimId))))
     && request.resource.data.updatedAt == request.time)
     || (signed() && request.auth.uid == uid
     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['countsUsed','lastClaimId'])

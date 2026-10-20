@@ -59,3 +59,37 @@ test('expired or blocked accounts cannot start, even if quota remains',()=>{
  assert.equal(data.get('customerAccounts/customer-1').countsUsed,1);
  assert.equal(first.items.product.quantity,5);
 });
+
+import {applyReopenGrant} from '../dist/license-quota.mjs';
+import {applyItem,validateBackup} from '../dist/core.mjs';
+
+test('reopening a completed count preserves all data and uses no additional count',async()=>{
+ const {s,db,data}=memoryFirestore({'customerAccounts/customer-1':{...active,countLimit:1}});
+ const first={id:'reopen-1',name:'ספירת בדיקה',items:{}};
+ applyItem(first,{code:'123',name:'מוצר בדיקה',mode:'units',quantity:5,unitPrice:10});
+ await claimCount(s,db,'customer-1',first);first.completedAt=1000;
+ const before=structuredClone(first.items),accountBefore=structuredClone(data.get('customerAccounts/customer-1'));
+ assert.equal(applyReopenGrant(first,{sessionId:first.id,token:'grant-1',grantedAt:1100}),true);
+ assert.equal(first.completedAt,undefined);assert.deepEqual(first.items,before);
+ applyItem(first,{code:'123',name:'מוצר בדיקה',mode:'units',quantity:2,unitPrice:10});
+ await claimCount(s,db,'customer-1',first);
+ assert.deepEqual(data.get('customerAccounts/customer-1'),accountBefore);
+ assert.equal(first.items['123'].quantity,7);
+ const saved={version:1,active:first.id,sessions:[first],custom:{}};
+ const restored=validateBackup(JSON.parse(JSON.stringify(saved)));
+ assert.equal(restored.sessions[0].items['123'].quantity,7);
+ assert.equal(restored.sessions[0].reopenAppliedToken,'grant-1');
+ first.completedAt=1200;
+ assert.equal(applyReopenGrant(first,{sessionId:first.id,token:'grant-1',grantedAt:1100}),false);
+ assert.equal(first.completedAt,1200);
+ assert.equal(applyReopenGrant(first,{sessionId:first.id,token:'grant-2',grantedAt:1300}),true);
+ await assert.rejects(claimCount(s,db,'customer-1',{id:'another-count'}),/מכסת הספירות נוצלה/);
+});
+
+test('missing, stale, replayed, or other-session grants do not reopen a count',()=>{
+ const first={id:'target',completedAt:1000,items:{keep:{quantity:4}}},before=structuredClone(first);
+ for(const grant of [null,{sessionId:'other',token:'x',grantedAt:1100},{sessionId:'target',token:'x',grantedAt:900},{sessionId:'target',token:'x'}]){
+  assert.equal(applyReopenGrant(first,grant),false);assert.deepEqual(first,before);
+ }
+ assert.equal(applyReopenGrant({...first,completedAt:undefined},{sessionId:'target',token:'x',grantedAt:1100}),false);
+});

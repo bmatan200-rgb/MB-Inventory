@@ -1,4 +1,5 @@
 import {applyItem,validCode,validateBackup} from './core.mjs';
+import {applyReopenGrant} from './license-quota.mjs';
 import {rightAlignXlsx} from './xlsx-rtl.mjs';
 import {initFirebaseLicense} from './account-access.mjs';
 import {openInventoryStorage,mergeInventory,checkedSnapshot} from './inventory-storage.mjs';
@@ -17,10 +18,7 @@ try{inventoryStorage=await openInventoryStorage();state=(await inventoryStorage.
 
 if(!state){const first=makeSession('הספירה שלי');state={version:1,active:first.id,sessions:[first],custom:{},business:emptyBusiness()}}else state.business=normalizeBusiness(state.business)
 if(globalThis.milaiAccess?.business)state.business={...state.business,...globalThis.milaiAccess.business};
-// Claim at most one local session for the server-authorized inventory year.
-if(!storageError&&!sessionForActivation()?.completedAt&&(sessionForActivation()?.licenseClaimRequired||Object.keys(sessionForActivation()?.items||{}).length>0))await globalThis.milaiAccess?.acquire(sessionForActivation());
 function sessionForActivation(){return state.sessions.find(s=>s.id===state.active)}
-document.addEventListener('milai-license-change',async()=>{if(!storageError&&!sessionForActivation()?.completedAt&&(sessionForActivation()?.licenseClaimRequired||Object.keys(sessionForActivation()?.items||{}).length>0))await globalThis.milaiAccess?.acquire(sessionForActivation());if(globalThis.milaiAccess?.business)await mutate(()=>{state.business={...state.business,...globalThis.milaiAccess.business}},false,true)});
 const session=()=>state.sessions.find(s=>s.id===state.active);
 function toast(message){$('toast').textContent=message;$('toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('show'),3200)}
 let mutationQueue=Promise.resolve();
@@ -46,7 +44,7 @@ $('scan').onclick=async()=>{if(!navigator.mediaDevices?.getUserMedia){toast('ה�
 $('closeCamera').onclick=stopCamera;$('camera').addEventListener('cancel',e=>{e.preventDefault();stopCamera()});$('manualFromCamera').onclick=()=>{stopCamera();$('barcode').focus()};document.addEventListener('visibilitychange',()=>{if(document.hidden)stopCamera()});
 $('newSession').onclick=()=>{$('newName').value='';$('sessionSelect').innerHTML=state.sessions.map(s=>`<option value="${escape(s.id)}" ${s.id===state.active?'selected':''}>${escape(s.name)} (${Object.keys(s.items).length} מוצרים)</option>`).join('');$('newDialog').showModal()};$('closeNew').onclick=()=>$('newDialog').close();
 $('sessionForm').onsubmit=async e=>{e.preventDefault();const name=$('newName').value.trim();if(!name)return;if(state.sessions.length>=200){toast('הגעת ל־200 ספירות. הורד גיבוי לפני המשך העבודה.');return}if(globalThis.milaiAccess&&!globalThis.milaiAccess.canStart()){toast('מכסת הספירות נוצלה או שהרישיון אינו פעיל. פנה למנהל להוספת ספירה או להארכת התוקף.');return}if(!name)return;if(state.sessions.length>=200){toast('הגעת ל־200 ספירות. הורד גיבוי לפני המשך העבודה.');return}const candidate=makeSession(name);if(globalThis.milaiAccess)candidate.licenseClaimRequired=true;if(globalThis.milaiAccess&&!await globalThis.milaiAccess.acquire(candidate)){toast('לא ניתן לפתוח ספירה. בדוק את מצב הרישיון או פנה למנהל.');return}if(await mutate(()=>{state.sessions.push(candidate);state.active=candidate.id},false,!!globalThis.milaiAccess)){$('newDialog').close();$('search').value='';render();toast('הספירה החדשה מוכנה')}};
-$('switchSession').onclick=async()=>{const id=$('sessionSelect').value;if(await mutate(()=>{state.active=id},false,true)){$('newDialog').close();$('search').value='';render()}};
+$('switchSession').onclick=async()=>{const id=$('sessionSelect').value;if(await mutate(()=>{state.active=id},false,true)){$('newDialog').close();$('search').value='';render();await syncSessionAccess()}};
 const openBusinessDialog=()=>{const b=state.business||emptyBusiness();$('businessName').readOnly=!!globalThis.milaiAccess?.business;$('businessNumber').readOnly=false;$('businessBranch').readOnly=!!globalThis.milaiAccess?.business&&!globalThis.milaiAccess?.countId;$('businessName').value=b.name;$('businessType').value=b.type;$('businessNumber').value=b.number;$('businessBranch').value=b.branch;$('counterName').value=b.counter;$('businessDialog').showModal()};$('internalMode').onclick=async()=>{if(await mutate(()=>{session().reportMode='internal'}))toast('נבחרה ספירה פנימית; פרטי העסק לא ייכללו בדוח')};$('businessMode').onclick=openBusinessDialog;$('closeBusiness').onclick=()=>$('businessDialog').close();$('businessForm').onsubmit=async e=>{e.preventDefault();const business=normalizeBusiness({name:$('businessName').value,type:$('businessType').value,number:$('businessNumber').value,branch:$('businessBranch').value,counter:$('counterName').value});if(await mutate(()=>{state.business=business;session().reportMode='business'})){$('businessDialog').close();toast('נבחרה ספירה עם פרטי עסק')}};
 function download(blob,name){const a=document.createElement('a'),url=URL.createObjectURL(blob);a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),2000)}
 $('backup').onclick=()=>download(new Blob([JSON.stringify(state)],{type:'application/json'}),`גיבוי-מלאי-${new Date().toISOString().slice(0,10)}.json`);
@@ -66,6 +64,29 @@ recoveryButton.onclick=async()=>{try{const rows=await inventoryStorage.recoveryC
 if(navigator.storage?.persisted)navigator.storage.persisted().then(persisted=>{if(!persisted)backupStatus.textContent+=' מומלץ להוריד עותק נוסף מחוץ למכשיר.'}).catch(()=>{});
 const persistentButton=document.createElement('button');persistentButton.type='button';persistentButton.className='text-button';persistentButton.textContent='הגנה על השמירה במכשיר';$('backupAdvanced').append(persistentButton);persistentButton.onclick=async()=>{const granted=await navigator.storage?.persist?.();toast(granted?'הדפדפן אישר אחסון מתמשך. עדיין חשוב גיבוי חיצוני':'לא אושרה שמירה מתמשכת. מומלץ לשמור גיבוי חיצוני')};
 const storageMode=document.createElement('section');storageMode.className='form-note';storageMode.innerHTML='<b>שמירה במכשיר</b><p role="status">בודק את האחסון המקומי…</p><button type="button" class="text-button">בדיקת מקום פנוי</button>';const storageDetails=document.createElement('details');storageDetails.className='storage-help';const storageSummary=document.createElement('summary');storageSummary.textContent='מידע נוסף על השמירה';storageDetails.append(storageSummary,storageMode);$('backupAdvanced').append(storageDetails);const storageModeText=storageMode.querySelector('p');const bytesText=n=>n<1024*1024?`${(n/1024).toFixed(0)} KB`:`${(n/1024/1024).toFixed(1)} MB`;async function updateStorageMode(){try{if(!navigator.storage?.estimate){storageModeText.textContent='הדפדפן אינו מספק נתוני שימוש ומכסה. הספירות נשמרות במכשיר הזה.';return}const {usage,quota}=await navigator.storage.estimate();if(!Number.isFinite(usage)||!Number.isFinite(quota)||quota<=0){storageModeText.textContent='לא התקבלו נתוני שימוש או מכסה מהדפדפן.';return}const percent=Math.min(100,Math.round(usage/quota*100));let persisted='';if(navigator.storage.persisted){try{persisted=(await navigator.storage.persisted())?' · אחסון מתמשך אושר':' · אחסון מתמשך לא אושר'}catch{}}storageModeText.textContent=`שימוש משוער בדפדפן: ${bytesText(usage)} מתוך ${bytesText(quota)} (${percent}%)${persisted}. הספירות נשמרות במכשיר הזה.`}catch{storageModeText.textContent='לא ניתן לקרוא נתוני שימוש ומכסה כרגע. הספירות ממשיכות להישמר במכשיר הזה.'}}storageMode.querySelector('button').onclick=updateStorageMode;updateStorageMode();
+
+let syncingAccess=false;
+async function syncSessionAccess(){
+ if(syncingAccess||storageError)return;syncingAccess=true;
+ try{
+  const current=sessionForActivation();
+  if(current?.completedAt){
+   const grant=await globalThis.milaiAccess?.reopenGrant(current);
+   if(grant&&sessionForActivation()===current){
+    let reopened=false;
+    if(await mutate(()=>{reopened=applyReopenGrant(current,grant)},false,true)&&reopened){
+     if($('finishSummary').open)$('finishSummary').close();
+     toast('המנהל פתח מחדש את הספירה. אפשר להמשיך מאיפה שעצרת');
+    }
+   }
+  }else if(current&&(current.licenseClaimRequired||Object.keys(current.items||{}).length>0)){
+   await globalThis.milaiAccess?.acquire(current);
+  }
+  if(globalThis.milaiAccess?.business)await mutate(()=>{state.business={...state.business,...globalThis.milaiAccess.business}},false,true);
+ }catch(e){toast('לא ניתן לבדוק פתיחה מחדש כרגע: '+e.message)}finally{syncingAccess=false}
+}
+document.addEventListener('milai-license-change',()=>syncSessionAccess());
+await syncSessionAccess();
 
 function connection(){$('connection').textContent=navigator.onLine?'מוכן לעבודה':'עבודה ללא אינטרנט'}window.addEventListener('online',connection);window.addEventListener('offline',connection);connection();render();
 try{if(!storageError&&inventoryStorage)await inventoryStorage.save(state)}catch{storageError=true;toast('השמירה במכשיר אינה זמינה. הנתונים הקודמים לא נמחקו. הורד גיבוי לפני המשך הספירה.')}

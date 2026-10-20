@@ -19,3 +19,11 @@ export async function claimCount(s,db,uid,session,now=Date.now()){
  session.licenseClaimId=session.id;
  return session.id;
 }
+
+// A grant applies once, to one existing session; it never changes inventory or quota.
+export function applyReopenGrant(session,grant){
+ if(!session?.completedAt||!grant?.token||grant.sessionId!==session.id||session.reopenAppliedToken===grant.token||!Number.isFinite(grant.grantedAt)||grant.grantedAt<session.completedAt)return false;
+ delete session.completedAt;
+ session.reopenAppliedToken=grant.token;
+ return true;
+}
