@@ -4,7 +4,7 @@ export function parseInventoryYear(value){
 }
 export function nextCountDetails(state,businessName='',now=new Date(),selectedYear=now.getFullYear()){
  const year=parseInventoryYear(selectedYear);
- const used=state.sessions.filter(s=>s.inventoryYear!==undefined?s.inventoryYear===year:new Date(s.created).getFullYear()===year);
+ const used=state.sessions.filter(s=>(s.completedAt||s.licenseClaimRequired||s.licenseClaimId||Object.keys(s.items||{}).length>0)&&(s.inventoryYear!==undefined?s.inventoryYear===year:new Date(s.created).getFullYear()===year));
  const sequence=Math.max(0,...used.map(s=>Number.isSafeInteger(s.countSequence)?s.countSequence:0),used.filter(s=>s.completedAt||s.licenseClaimRequired||s.licenseClaimId||Object.keys(s.items||{}).length).length)+1;
  const suffix=`ספירה מס׳ ${sequence} — שנת ${year}`,prefix=String(businessName||'').trim();
  return {name:prefix?`${prefix.slice(0,80-suffix.length-3)} — ${suffix}`:suffix,inventoryYear:year,countSequence:sequence};

@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
 import * as core from '../dist/core.mjs';
+import {claimCount} from '../dist/license-quota.mjs';
 import * as flow from '../dist/count-flow.mjs';
 import * as presentation from '../dist/count-presentation.mjs';
 import {synchronizeReopen} from '../dist/session-reopen.mjs';
@@ -24,8 +25,15 @@ async function app(environment){
  }
  for(const [,id] of html.matchAll(/id="([^"]+)"/g))nodes.set(id,new Element());
  const roots=new Map();const document={body:new Element(),getElementById:id=>nodes.get(id),createElement:()=>new Element(),addEventListener(){},querySelector:key=>{if(key==='dialog[open]')return null;if(!roots.has(key))roots.set(key,new Element());return roots.get(key)}};
+ const verifiedClaims=new Set();
+ // Real quota transaction function, with an isolated in-memory Firestore adapter.
+ const sdk={doc:(_,...parts)=>parts.join('/'),serverTimestamp:()=>1,runTransaction:async(_,fn)=>{
+  const writes=[];const tx={get:async ref=>{const value=ref.includes('/countClaims/')?(environment.claims.has(ref.split('/').at(-1))?{sessionId:ref.split('/').at(-1)}:undefined):{status:'active',expiresAt:Date.now()+86400000,countLimit:environment.limit,countsUsed:environment.used};return{exists:()=>value!==undefined,data:()=>value}},update:(_ref,patch)=>writes.push(()=>{environment.used=patch.countsUsed}),set:(ref)=>writes.push(()=>environment.claims.add(ref.split('/').at(-1)))};
+  await fn(tx);for(const write of writes)write();
+ }};
  const access={business:{name:'עסק בדיקה'},canStart:()=>environment.used<environment.limit,
-  canWrite:s=>!s.completedAt,acquire:async s=>{if(environment.claims.has(s.id))return true;if(!access.canStart())return false;environment.used++;environment.claims.add(s.id);s.licenseClaimRequired=true;s.licenseClaimId=s.id;return true},reopenGrant:async()=>null,currentReopenToken:()=>'',finish:async s=>s.completedAt};
+  canWrite:s=>!s.completedAt&&(!s.licenseClaimRequired||(s.licenseClaimId===s.id&&verifiedClaims.has(s.id))),
+  acquire:async s=>{try{await claimCount(sdk,{},'test',s);verifiedClaims.add(s.id);return true}catch{return false}},reopenGrant:async()=>null,currentReopenToken:()=>'',finish:async s=>s.completedAt};
  const storage={load:async()=>({state:structuredClone(environment.saved)}),getHandle:async()=>null,save:async s=>{core.validateBackup(s);environment.saved=structuredClone(s);return{}},recoveryCopies:async()=>[]};
  const Clock=environment.now?class extends Date{constructor(...args){super(...(args.length?args:[environment.now]))}static now(){return new Date(environment.now).getTime()}}:Date;
  const context={...core,...flow,...presentation,synchronizeReopen,rightAlignXlsx,document,milaiAccess:access,
@@ -41,7 +49,7 @@ async function app(environment){
  return{nodes,downloads,requests,errors,...result,XLSX:context.XLSX};
 }
 const submit={preventDefault(){}};
-async function addItem(a,code,quantity){await a.openProduct(code);if(a.nodes.get('newDialog').open){a.nodes.get('newYear').value='2026';await a.nodes.get('sessionForm').onsubmit(submit)}a.nodes.get('productName').value='מוצר בדיקה';a.nodes.get('mode').value='units';a.nodes.get('quantity').value=String(quantity);a.nodes.get('unitPrice').value='7.5';a.nodes.get('operation').value='add';await a.nodes.get('productForm').onsubmit(submit)}
+async function addItem(a,code,quantity){await a.openProduct(code);if(a.nodes.get('firstYearDialog').open){a.nodes.get('firstInventoryYear').value='2026';await a.nodes.get('firstYearForm').onsubmit(submit)}a.nodes.get('productName').value='מוצר בדיקה';a.nodes.get('mode').value='units';a.nodes.get('quantity').value=String(quantity);a.nodes.get('unitPrice').value='7.5';a.nodes.get('operation').value='add';await a.nodes.get('productForm').onsubmit(submit)}
 async function start(a,year='2026'){a.nodes.get('newSession').onclick();a.nodes.get('newYear').value=year;await a.nodes.get('sessionForm').onsubmit(submit)}
 async function exportReport(a,number){a.nodes.get('export').onclick();assert.equal(a.nodes.get('businessName').value,'עסק בדיקה');assert.equal(a.nodes.get('businessName').readOnly,false);a.nodes.get('businessNumber').value=number;await a.nodes.get('businessForm').onsubmit(submit);const bytes=Buffer.from(await a.downloads.at(-1).arrayBuffer());const wb=a.XLSX.read(bytes,{type:'buffer'});return a.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''})}
 
@@ -100,12 +108,33 @@ test('each export starts with an empty number even for legacy shared details or 
 
 test('first and new count require an inventory year; January 2027 can count 2026 without changing the license',async()=>{
  const env={saved:null,used:0,limit:3,claims:new Set(),now:'2027-01-05T12:00:00Z'},a=await app(env);
- await a.openProduct('123');assert.equal(a.nodes.get('newDialog').open,true);assert.equal(a.nodes.get('newYear').value,'');assert.equal(env.used,0);
- for(const year of ['', 'abc', '2026.5', '2019']){a.nodes.get('newYear').value=year;await a.nodes.get('sessionForm').onsubmit(submit);assert.equal(env.used,0)}
- a.nodes.get('newYear').value='2026';await a.nodes.get('sessionForm').onsubmit(submit);
- assert.equal(env.used,1);assert.equal(a.nodes.get('editor').open,true);assert.equal(a.state().sessions[0].inventoryYear,2026);assert.equal(a.state().sessions[0].countSequence,1);assert.match(a.state().sessions[0].created,/2027/);
+ await a.openProduct('123');assert.equal(a.nodes.get('firstYearDialog').open,true);assert.equal(a.nodes.get('firstInventoryYear').value,'');assert.equal(env.used,0);
+ for(const year of ['', 'abc', '2026.5', '2019']){a.nodes.get('firstInventoryYear').value=year;await a.nodes.get('firstYearForm').onsubmit(submit);assert.equal(env.used,0)}
+ a.nodes.get('firstInventoryYear').value='2026';await a.nodes.get('firstYearForm').onsubmit(submit);
+ assert.equal(env.used,0);assert.equal(a.nodes.get('editor').open,true);assert.equal(a.state().sessions[0].inventoryYear,2026);assert.equal(a.state().sessions[0].countSequence,1);assert.match(a.state().sessions[0].created,/2027/);
  await addItem(a,'123',2);let rows=await exportReport(a,'');assert.equal(rows.find(r=>r[0]==='שנת המלאי')[1],2026);
  await a.nodes.get('finishCount').onclick();await start(a,'2026');assert.equal(a.state().sessions[1].inventoryYear,2026);assert.equal(a.state().sessions[1].countSequence,2);
  await addItem(a,'456',1);await a.nodes.get('finishCount').onclick();await start(a,'2027');assert.equal(a.state().sessions[2].inventoryYear,2027);assert.equal(a.state().sessions[2].countSequence,1);assert.equal(env.used,3);
  const loaded=await app(env);assert.equal(loaded.state().sessions[0].inventoryYear,2026);assert.equal(loaded.state().sessions[0].items['123'].quantity,2);assert.equal(env.used,3);
+});
+
+
+test('first scan sets year locally on a one-count license; cancel, empty finish and reload consume no extra slot',async()=>{
+ const env={saved:null,used:0,limit:1,claims:new Set()},a=await app(env),id=a.state().active;
+ await a.openProduct('000123');assert.equal(a.nodes.get('firstYearDialog').open,true);assert.equal(a.nodes.get('newDialog').open,false);
+ a.nodes.get('closeFirstYear').onclick();assert.equal(env.used,0);assert.equal(a.nodes.get('editor').open,false);
+ await a.nodes.get('finishCount').onclick();assert.equal(a.state().sessions[0].completedAt,undefined);assert.equal(env.used,0);
+ await a.openProduct('000123');a.nodes.get('firstInventoryYear').value='2026';await a.nodes.get('firstYearForm').onsubmit(submit);
+ assert.equal(a.nodes.get('editor').open,true);assert.equal(a.nodes.get('editingBarcode').textContent,'000123');assert.equal(a.state().active,id);assert.equal(a.state().sessions.length,1);assert.equal(env.used,0);
+ const loaded=await app(env);assert.equal(loaded.state().active,id);assert.equal(env.used,0);
+ await addItem(loaded,'000123',5);assert.equal(loaded.nodes.get('firstYearDialog').open,false);assert.equal(env.used,1);assert.equal(loaded.state().sessions[0].countSequence,1);assert.equal(loaded.state().sessions[0].items['000123'].quantity,5);
+ await loaded.nodes.get('closeEditor').onclick();await loaded.openProduct('456');assert.equal(loaded.nodes.get('editor').open,true);assert.equal(env.used,1);
+ await start(loaded);assert.equal(loaded.state().sessions.length,1);assert.equal(env.used,1);assert.match(loaded.nodes.get('newCountError').textContent,/יש לסיים קודם/);
+});
+test('an empty count already authorized on the server sets its year and resumes at exhausted quota with the same ID',async()=>{
+ const id='already-authorized',saved={version:1,active:id,sessions:[{id,name:'הספירה שלי',created:'2026-01-01',licenseClaimRequired:true,licenseClaimId:id,items:{}}],custom:{},business:{name:'עסק בדיקה'}};
+ const env={saved,used:1,limit:1,claims:new Set([id])},a=await app(env);
+ await a.openProduct('123');assert.equal(a.nodes.get('firstYearDialog').open,true);a.nodes.get('firstInventoryYear').value='2025';await a.nodes.get('firstYearForm').onsubmit(submit);
+ assert.equal(a.nodes.get('editor').open,true);assert.equal(a.state().active,id);assert.equal(a.state().sessions.length,1);assert.equal(env.used,1);
+ await addItem(a,'123',3);assert.equal(env.used,1);assert.equal(a.state().sessions[0].inventoryYear,2025);assert.equal(a.state().sessions[0].items['123'].quantity,3);
 });
