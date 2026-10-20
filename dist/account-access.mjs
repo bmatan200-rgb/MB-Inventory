@@ -8,13 +8,15 @@ const live=()=>navigator.onLine&&serverVerified&&eligible(account);
 const quota=()=>licenseQuota(account);
 access.canWrite=session=>live()&&!session?.completedAt&&(!session?.licenseClaimRequired||(session.licenseClaimId===session.id&&verifiedClaims.has(`${b?.auth.currentUser?.uid}:${session.id}`)));access.canStart=()=>live()&&hasAvailableCount(account);
 access.acquire=async session=>{if(!session||!live())return false;try{const claimId=await claimCount(s,b.db,b.auth.currentUser.uid,session);verifiedClaims.add(`${b.auth.currentUser.uid}:${claimId}`);await refresh();return true}catch(e){error=message(e);paint();return false}};
+access.currentReopenToken=()=>live()&&typeof account?.reopenToken==='string'?account.reopenToken:'';
+access.reopenSessionId=()=>live()?account?.reopenClaimId:null;
 access.reopenGrant=async session=>{
- if(!session?.completedAt||!live()||account?.reopenClaimId!==session.id||typeof account?.reopenToken!=='string'||!account.reopenToken||session.reopenAppliedToken===account.reopenToken)return null;
+ if(!session?.completedAt||!live()||account?.reopenClaimId!==session.id||typeof account?.reopenToken!=='string'||!account.reopenToken||session.reopenAppliedToken===account.reopenToken||session.reopenClosedToken===account.reopenToken)return null;
  const uid=b.auth.currentUser.uid,token=account.reopenToken;
  const claim=await s.getDocFromServer(s.doc(b.db,'customerAccounts',uid,'countClaims',session.id));
  if(b.auth.currentUser?.uid!==uid||!live()||account.reopenToken!==token||account.reopenClaimId!==session.id||!claim.exists()||claim.data().sessionId!==session.id)return null;
  verifiedClaims.add(`${uid}:${session.id}`);
- return {sessionId:session.id,token,grantedAt:account.reopenGrantedAt?.toMillis?.()};
+ return {sessionId:session.id,token};
 };
 access.finish=async session=>{if(!session.completedAt&&!access.canWrite(session))throw Error('החשבון אינו פעיל');return session.completedAt||Date.now()};
 const bar=document.createElement('section');bar.className='activation-bar';const label=document.createElement('span'),open=document.createElement('button');open.textContent='החשבון שלי';bar.append(label,open);document.querySelector('main').prepend(bar);

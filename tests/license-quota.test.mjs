@@ -82,14 +82,21 @@ test('reopening a completed count preserves all data and uses no additional coun
  first.completedAt=1200;
  assert.equal(applyReopenGrant(first,{sessionId:first.id,token:'grant-1',grantedAt:1100}),false);
  assert.equal(first.completedAt,1200);
+ first.reopenClosedToken='grant-before-finish';
+ assert.equal(applyReopenGrant(first,{sessionId:first.id,token:'grant-before-finish'}),false);
  assert.equal(applyReopenGrant(first,{sessionId:first.id,token:'grant-2',grantedAt:1300}),true);
  await assert.rejects(claimCount(s,db,'customer-1',{id:'another-count'}),/מכסת הספירות נוצלה/);
 });
 
 test('missing, stale, replayed, or other-session grants do not reopen a count',()=>{
  const first={id:'target',completedAt:1000,items:{keep:{quantity:4}}},before=structuredClone(first);
- for(const grant of [null,{sessionId:'other',token:'x',grantedAt:1100},{sessionId:'target',token:'x',grantedAt:900},{sessionId:'target',token:'x'}]){
+ for(const grant of [null,{sessionId:'other',token:'x',grantedAt:1100},{sessionId:'target',token:''}]){
   assert.equal(applyReopenGrant(first,grant),false);assert.deepEqual(first,before);
  }
  assert.equal(applyReopenGrant({...first,completedAt:undefined},{sessionId:'target',token:'x',grantedAt:1100}),false);
+});
+
+test('a device clock ahead of the server does not block an authenticated new reopen grant',()=>{
+ const session={id:'clock-skew',completedAt:Date.now()+3600000,items:{}};
+ assert.equal(applyReopenGrant(session,{sessionId:session.id,token:'new-manager-grant',grantedAt:Date.now()}),true);
 });
