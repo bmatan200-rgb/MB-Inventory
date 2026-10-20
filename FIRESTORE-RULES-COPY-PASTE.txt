@@ -1,0 +1,77 @@
+rules_version = '2';
+service cloud.firestore {
+ match /databases/{database}/documents {
+  function signed() { return request.auth != null; }
+  function owner() { return signed() && request.auth.uid == get(/databases/$(database)/documents/settings/accountOwner).data.uid; }
+  function accountPath(uid) { return /databases/$(database)/documents/customerAccounts/$(uid); }
+  function termsPath(uid) { let policy = "terms-2026-10-20-ded6191085b4"; return /databases/$(database)/documents/customerAccounts/$(uid)/termsAcceptances/$(policy); }
+  function acceptedTerms(uid) { return exists(termsPath(uid)) && get(termsPath(uid)).data.accepted == true && get(termsPath(uid)).data.termsSha256 == "ded6191085b456d622b1932fc4986de9ec1d6d1eb71ffe5e6e4f263b6d0b22fc"; }
+  function acceptedTermsAfter(uid) { return getAfter(termsPath(uid)).data.accepted == true && getAfter(termsPath(uid)).data.termsSha256 == "ded6191085b456d622b1932fc4986de9ec1d6d1eb71ffe5e6e4f263b6d0b22fc"; }
+  function approvedTermsText() { return "מלאי בקליק — תנאי שימוש ומדיניות פרטיות\n\nעודכן ביום 20.10.2026\n\nהמפעיל: MB שירותי תוכנה, המופעל על ידי מתן ביטון\nמספר עוסק: 204501282\nכתובת לפניות: דפנה 15, באר שבע\nדוא״ל לפניות, תמיכה ופרטיות: bmatan200@gmail.com\nטלפון ו־WhatsApp: 054-3111408 · פנייה ב־WhatsApp\n\nא. תנאי השימוש\n\n1. השירות והמשתמשים\n\nמלאי בקליק היא אפליקציה המסייעת בספירת מלאי באמצעות סריקת ברקודים או הקלדה, הזנת מוצרים, כמויות ומחירים, והפקת דוחות וקובצי גיבוי. השירות מיועד לשימוש עסקי וגם לשימוש פרטי, בהתאם לרישיון שנרכש.\n\nהנרשם נדרש להיות מוסמך להתקשר בהסכם לפי דין ולמסור פרטי חשבון נכונים. בהרשמה מטעם עסק, על הנרשם להיות מוסמך לפעול בשמו. אין להזין מידע אישי של אחרים שאינו דרוש לספירה או שאין הרשאה להשתמש בו.\n\n2. חשבון, רישיון ומכשיר\n\nההרשמה כשלעצמה אינה מקנה רישיון פעיל. הפעלת השירות מותנית באישור המפעיל ובהסדרת התשלום כפי שסוכם. פרטי העסקה יפרטו את המחיר, מכסת הספירות ותאריך התפוגה לפני התשלום.\n\nהרישיון הוא לשימוש במכשיר אחד. בשימוש עסקי הוא מיועד לעסק אחד, וניתן לאפשר לעובדי אותו עסק להשתמש בו באותו מכשיר ובאחריות העסק. בשימוש פרטי הרישיון מיועד למשתמש שרכש אותו. העברה למכשיר אחר עקב החלפה או תקלה תתואם עם המפעיל. אין להעביר את הרישיון לעסק אחר, לשתף אותו עם צדדים שאינם מורשים או למכור גישה לשירות.\n\nהלקוח אחראי לשמירת סודיות פרטי הגישה ולדיווח למפעיל אם התעורר חשד לשימוש לא מורשה. האפשרות הטכנית להתחבר ממכשיר נוסף אינה מרחיבה את הרישיון ואינה יוצרת סנכרון נתונים.\n\n3. ספירות, מכסה ותוקף\n\nכל ספירה חדשה היא רשומת מלאי נפרדת. במערכת, המכסה מנוצלת בעת אישור פתיחת ספירה, גם לפני הזנת המוצר הראשון; סיום הספירה אינו המועד היחיד שבו נבדקת או מנוצלת מכסה. רענון מסך, חזרה לספירה קיימת או ייצוא דוח אינם ספירה נוספת.\n\nשנת המלאי נבחרת עבור הספירה ואינה חייבת להיות השנה שבה מבוצעת העבודה. אפשר לבצע כמה ספירות לאותה שנת מלאי, בכפוף למכסה שאושרה. הארכת תוקף והוספת ספירות הן פעולות נפרדות. אין הבטחה לספירות נוספות רק מפני שתוקף הרישיון הוארך.\n\nסיום ספירה נועל אותה להמשך הזנת מוצרים. פתיחה מחדש לצורך תיקון טעונה אישור המפעיל, בהתאם לאפשרויות המערכת. סיום ספירה, פקיעת רישיון או הוספת מכסה אינם מיועדים למחוק את הספירות שכבר נשמרו במכשיר. ניתן לצפות ולייצא נתונים קיימים ככל שהתוכנה והמידע נגישים במכשיר.\n\n4. שמירה מקומית וגיבוי\n\nנתוני הספירה נשמרים מקומית בדפדפן ובמכשיר שבהם נעשה השימוש. אין גיבוי ענן אוטומטי של הספירות ואין סנכרון ספירות בין מכשירים או דפדפנים. נתונים עלולים לא להיות זמינים לאחר מחיקת נתוני האתר, שימוש בגלישה פרטית, החלפת מכשיר או דפדפן, תקלה או אובדן מכשיר.\n\nעל המשתמש לשמור גיבוי חיצוני באמצעות אפשרויות הגיבוי, ובפרט במהלך ספירה משמעותית ובסיומה. קובץ Excel הוא דוח; קובץ הגיבוי מיועד לשחזור באמצעות מנגנון השחזור. אם משתמשים בגיבוי לתיקייה יש לוודא שהגיבוי אכן נשמר ונגיש.\n\nבמערכת, חשבונות שונים באותו פרופיל דפדפן משתמשים באותו אחסון מלאי מקומי. התנתקות אינה מוחקת את הנתונים המקומיים. אין להשתמש באותו פרופיל דפדפן לחשבונות של לקוחות שונים, ויש להגן על הגישה למכשיר.\n\nנדרש חיבור אינטרנט לבדיקת החשבון והרישיון ולעריכה במערכת. זמינות מידע שכבר נשמר לצפייה, לגיבוי ולייצוא תלויה בכך שקובצי האפליקציה והנתונים נגישים במכשיר.\n\n5. איכות המידע ובדיקת הדוחות\n\nמאגר הברקודים מסייע בזיהוי מוצרים, אך עלולות להיות בו טעויות, שמות לא מעודכנים או מוצרים חסרים. המשתמש נדרש לבדוק את הזיהוי, יחידת המידה, הכמות, המחיר ושנת המלאי ולתקן אותם לפי הצורך.\n\nהמערכת היא כלי עזר ואינה מבצעת בדיקה פיזית של המלאי ואינה מספקת ייעוץ חשבונאי או מס. לפני הסתמכות על דוח או הגשתו לצד אחר יש לבדוק את הנתונים ואת התאמת הדוח לצורך הרלוונטי. החובות המוטלות על המשתמש אינן מבטלות אחריות המוטלת על המפעיל לפי דין.\n\n6. תשלום, חידוש וביטולים\n\nהתשלום הוא חד־פעמי לפי העסקה שנרכשה, עם מכסת ספירות ותוקף שנמסרים ללקוח. אין חידוש או חיוב אוטומטי. הוספת ספירות או חידוש לתקופה נוספת ייעשו לאחר סיכום נפרד. מסמכי תשלום וחשבוניות מטופלים בנפרד מפרטי הספירה.\n\nניתן למסור בקשת ביטול או החזר בדוא״ל bmatan200@gmail.com, בטלפון או ב־WhatsApp במספר 054-3111408, או בדואר לכתובת דפנה 15, באר שבע. יש למסור רק את פרטי זיהוי העסקה והחשבון הדרושים לאיתורה. בקשות ייבחנו באופן פרטני, לפני תחילת השימוש וגם לאחריה, בהתחשב בנסיבות ובשירות שסופק.\n\nכאשר עומדת ללקוח זכות ביטול, החזר או סעד אחר לפי דין, היא אינה מותנית בשיקול דעתו של המפעיל. אין בהתחלת השימוש, בהסכמה לתקנון או בסעיף הבדיקה הפרטנית ויתור על זכות כזו. המייל אינו גורע מדרכי ביטול נוספות שיש לאפשר לפי הדין החל. במקרה של פגם או אי־התאמה יטופל העניין בהתאם לדין.\n\n7. תמיכה, עדכונים וזמינות\n\nהתמיכה ניתנת בדוא״ל וב־WhatsApp במספר 054-3111408, בתיאום מראש, ללא התחייבות לשעות פעילות או לזמן מענה קבוע, בכפוף לחובות החלות לפי דין. בעת פנייה יש לתאר את הבעיה ולצרף רק מידע הדרוש לטיפול בה. שליחת גיבוי הכולל נתוני עסק תיעשה רק אם נדרשת ובהסכמת המשתמש.\n\nהמפעיל רשאי לבצע תחזוקה ועדכונים ולתקן תקלות. אין התחייבות לזמינות רצופה או לתאימות לכל מכשיר ודפדפן. יש לשמור גיבוי לפני פעולות שעלולות להשפיע על המידע המקומי. תנאי זה אינו גורע מהתחייבות שסוכמה בעסקה מסוימת או מאחריות לפי דין.\n\n8. שימוש מותר, זכויות ואחריות\n\nאין לעשות שימוש בלתי חוקי בשירות, לנסות לגשת לחשבונות של אחרים, לעקוף את מנגנון הרישוי, לפגוע באבטחה או להעתיק ולהפיץ את התוכנה שלא בהתאם להרשאה או לדין. זכויות במידע שהמשתמש הזין אינן מועברות למפעיל מעצם השימוש. זכויות בתוכנה ובתכנים אחרים שייכות לבעלי הזכויות הרלוונטיים, בכפוף לדין ולרישיונות החלים.\n\nבמקרה של חשד מבוסס לשימוש לא מורשה או לסיכון אבטחה ניתן להגביל גישה באופן הנדרש לנסיבות, תוך מתן הסבר ואפשרות לבירור ככל שניתן. ההגבלה אינה מקנה זכות למחוק את נתוני המשתמש ללא בסיס מתאים.\n\nאחריות הצדדים לנזקים תיקבע לפי הדין ונסיבות המקרה, תוך התחשבות בפעולות גיבוי, בבדיקת הנתונים ובחובות כל צד. אין בתקנון פטור גורף מאחריות, מניעת גישה לערכאות או ויתור על זכויות שאי אפשר להתנות עליהן.\n\n9. שינויים בתנאים והדין החל\n\nשינויים מהותיים בתנאים יובאו לידיעת המשתמשים, ובמידת הצורך יתבקש אישור נוסף. שינוי לא יחול למפרע על מחיר, מכסה או זכות מהותית בעסקה שכבר סוכמה, ללא הסכמה מתאימה או בסיס בדין. הדין הישראלי יחול, וסמכות השיפוט תיקבע בהתאם לדין. הוראה שאינה תקפה לא תבטל כשלעצמה את יתר ההוראות.\n\nב. מדיניות פרטיות\n\n10. מי מטפל במידע ולשם מה\n\nבעל השליטה במידע הנאסף להפעלת השירות הוא מתן ביטון, הפועל בשם MB שירותי תוכנה. ניתן לפנות בנושאי פרטיות לדוא״ל המופיע בראש המסמך.\n\nבעת הרשמה נמסרים כתובת מייל, שם העסק או שם החשבון וסיסמה. המייל ושם החשבון משמשים לזיהוי החשבון, לקשר שירות ולניהול הרישיון. הסיסמה מטופלת בשירות האימות של Firebase ולא נכתבת בידי האפליקציה לכרטיס העסק ב־Firestore. מסירת פרטי ההרשמה היא לפי בחירת המשתמש ואינה חובה מכוח דין, אך ללא הפרטים הנדרשים לא ניתן ליצור ולהפעיל חשבון.\n\nלצורך הפעלת הרישיון נשמרים גם מזהה חשבון, מצב ההפעלה, תוקף, מכסת ספירות, מספר ספירות שנוצלו ורישומי אישור לפתיחת ספירה. לצורך תיעוד אישור התקנון נשמרים גם אישור ההסכמה, מועד האישור וזיהוי הנוסח שאושר, המקושר לעותק שמור של אותו נוסח. אין צורך לאסוף מספר תעודת זהות לצורך רישום האישור.\n\n11. נתוני המלאי ופרטי דוחות\n\nבתפעול הרגיל של האפליקציה, רשימות המוצרים, הכמויות והמחירים נשמרות במכשיר ואינן מועלות בידי האפליקציה ל־Firebase. קובץ Excel נוצר בדפדפן. מספר ח.פ./עוסק מורשה בשלב הייצוא אינו חובה, והוא נכלל בדוח אם המשתמש מזין אותו. פרטי הדוח עשויים להיכלל בשמירה המקומית ובקובצי הגיבוי שהמשתמש מפיק.\n\nהמשתמש שולט במקום שבו הוא שומר או משתף דוחות וגיבויים. כאשר המשתמש שולח מידע לתמיכה, המפעיל יקבל את המידע שנשלח ויעבד אותו לצורך הטיפול בפנייה. פנייה ב־WhatsApp מתבצעת גם באמצעות שירות WhatsApp, ומידע שנשלח בערוץ זה מעובד גם במסגרתו. יש להימנע משליחת מידע שאינו נחוץ.\n\n12. ספקי שירות ומסירת מידע\n\nGoogle Firebase משמש לאימות משתמשים ולניהול נתוני החשבון והרישיון; מנגנון אישור התקנון משתמש בו גם לתיעוד אישורים. Render משמש לאירוח האתר. במסגרת הפעלת שירותי האירוח והאימות, ספקים אלה עשויים לעבד גם נתוני חיבור ואבטחה טכניים. אין להסיק מכך שרשימות המלאי נשלחות לשרת.\n\nמידע יימסר לספקי שירות ככל שנדרש להפעלת השירות, לתמיכה, להפקת מסמכי עסקה או לקיום חובות לפי דין. ניתן למסור מידע לרשות מוסמכת כאשר נדרשת מסירה כדין, ולגורם מקצועי ככל שנדרש לבירור מחלוקת ותוך צמצום המידע. אין הרשאה למכירת מידע אישי או לשימוש בו למטרות בלתי קשורות לשירות. שירותי תשתית עשויים לכלול עיבוד מחוץ לישראל, בכפוף לדין החל.\n\n13. שמירה, אבטחה ופניות\n\nמידע חשבון ורישוי יישמר כל עוד הוא נחוץ להפעלת השירות. לאחר סיום ההתקשרות יישמר רק מידע הדרוש למטרה מוצדקת, כגון קיום חובה חוקית, תיעוד עסקה ואישור תנאים או בירור מחלוקת, ולמשך הנדרש למטרה זו. מידע שאינו נחוץ עוד יימחק או יותמם, בכפוף לדין. סגירת חשבון אינה מוחקת אוטומטית את קובצי הדוח והגיבוי שהמשתמש שמר במכשירו.\n\nניתן לפנות במייל בבקשה לעיון במידע האישי שנשמר על המשתמש, ולבקש תיקון של מידע שאינו נכון, שלם, ברור או מעודכן, בהתאם לדין. ניתן לפנות גם בבקשת סגירת חשבון או מחיקה; הבקשה תיבחן לפי הדין והצורך הלגיטימי בהמשך שמירת מידע מסוים. ייתכן שיידרש זיהוי סביר לפני ביצוע פעולה בחשבון.\n\nהמפעיל נדרש לנקוט אמצעי אבטחה מתאימים למידע שבשליטתו. המשתמש נדרש להגן על המכשיר ופרטי הגישה ולשמור גיבויים. אישור התנאים אינו מהווה ויתור על זכויות פרטיות או פטור מחובות אבטחת מידע.\n\nבקשת ביטול עסקה · פנייה בנושא פרטיות\n"; }
+  match /settings/accountOwner { allow read: if owner(); allow write: if false; }
+  match /customerAccounts/{uid} {
+   allow read: if owner() || (signed() && request.auth.uid == uid);
+   allow create: if signed() && request.auth.uid == uid
+    && request.resource.data.keys().hasAll(['uid','email','businessName','status','expiresAt','countLimit','countsUsed','lastClaimId','createdAt'])
+    && request.resource.data.keys().hasOnly(['uid','email','businessName','status','expiresAt','countLimit','countsUsed','lastClaimId','createdAt'])
+    && request.resource.data.uid == uid && request.resource.data.email == request.auth.token.email
+    && request.resource.data.businessName is string && request.resource.data.businessName.size() > 0 && request.resource.data.businessName.size() <= 100
+    && request.resource.data.status == 'pending' && request.resource.data.expiresAt == 0
+    && request.resource.data.countLimit == 1 && request.resource.data.countsUsed == 0 && request.resource.data.lastClaimId == ''
+    && request.resource.data.createdAt == request.time && acceptedTermsAfter(uid);
+   allow update: if (owner()
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','expiresAt','updatedAt','countLimit','countsUsed','lastClaimId','number','reopenClaimId','reopenToken','reopenGrantedAt'])
+    && request.resource.data.status in ['pending','active','blocked']
+    && request.resource.data.expiresAt is number && request.resource.data.expiresAt >= 0
+    && request.resource.data.countLimit is int && request.resource.data.countLimit >= resource.data.get('countsUsed', 0)
+    && request.resource.data.countLimit <= 100000
+    && request.resource.data.countsUsed is int && request.resource.data.countsUsed >= 0
+    && request.resource.data.countsUsed <= request.resource.data.countLimit
+    && request.resource.data.lastClaimId == resource.data.get('lastClaimId', '')
+    && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['number']) || (request.resource.data.number is string && request.resource.data.number.size() == 0))
+    && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['reopenClaimId','reopenToken','reopenGrantedAt']) || (
+      request.resource.data.reopenClaimId == resource.data.lastClaimId
+      && request.resource.data.reopenGrantedAt == request.time
+      && request.resource.data.reopenToken is string
+      && request.resource.data.reopenToken.size() > 0 && request.resource.data.reopenToken.size() <= 100
+      && exists(/databases/$(database)/documents/customerAccounts/$(uid)/countClaims/$(request.resource.data.reopenClaimId))))
+    && request.resource.data.updatedAt == request.time)
+    || (signed() && request.auth.uid == uid && acceptedTerms(uid)
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['countsUsed','lastClaimId'])
+    && request.resource.data.countsUsed == resource.data.get('countsUsed', 0) + 1
+    && request.resource.data.countLimit == resource.data.get('countLimit', 0)
+    && request.resource.data.status == 'active' && request.resource.data.expiresAt > request.time.toMillis()
+    && request.resource.data.countsUsed <= request.resource.data.countLimit
+    && request.resource.data.lastClaimId is string && request.resource.data.lastClaimId.size() > 0
+    && existsAfter(/databases/$(database)/documents/customerAccounts/$(uid)/countClaims/$(request.resource.data.lastClaimId))
+    && getAfter(/databases/$(database)/documents/customerAccounts/$(uid)/countClaims/$(request.resource.data.lastClaimId)).data.sessionId == request.resource.data.lastClaimId);
+   allow delete: if false;
+   match /termsAcceptances/{policyId} {
+    allow read: if owner() || (signed() && request.auth.uid == uid);
+    allow create: if signed() && request.auth.uid == uid
+     && policyId == "terms-2026-10-20-ded6191085b4"
+     && request.resource.data.keys().hasAll(['uid','accepted','termsId','termsSha256','termsText','acceptedAt'])
+     && request.resource.data.keys().hasOnly(['uid','accepted','termsId','termsSha256','termsText','acceptedAt'])
+     && request.resource.data.uid == uid && request.resource.data.accepted == true
+     && request.resource.data.termsId == policyId && request.resource.data.termsSha256 == "ded6191085b456d622b1932fc4986de9ec1d6d1eb71ffe5e6e4f263b6d0b22fc"
+     && request.resource.data.termsText == approvedTermsText()
+     && request.resource.data.acceptedAt == request.time
+     && getAfter(accountPath(uid)).data.uid == uid;
+    allow update, delete: if false;
+   }
+   match /countClaims/{claimId} {
+    allow read: if owner() || (signed() && request.auth.uid == uid);
+    allow create: if signed() && request.auth.uid == uid && acceptedTerms(uid)
+     && request.resource.data.keys().hasOnly(['sessionId','createdAt'])
+     && request.resource.data.sessionId == claimId && request.resource.data.createdAt == request.time
+     && get(accountPath(uid)).data.status == 'active'
+     && get(accountPath(uid)).data.expiresAt > request.time.toMillis()
+     && getAfter(accountPath(uid)).data.countsUsed == get(accountPath(uid)).data.countsUsed + 1
+     && getAfter(accountPath(uid)).data.lastClaimId == claimId
+     && getAfter(accountPath(uid)).data.countsUsed <= getAfter(accountPath(uid)).data.countLimit;
+    allow update, delete: if false;
+   }
+  }
+  match /{document=**} { allow read, write: if false; }
+ }
+}

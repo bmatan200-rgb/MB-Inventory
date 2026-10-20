@@ -1,0 +1,60 @@
+rules_version = '2';
+service cloud.firestore {
+ match /databases/{database}/documents {
+  function signed() { return request.auth != null; }
+  function owner() { return signed() && request.auth.uid == get(/databases/$(database)/documents/settings/accountOwner).data.uid; }
+  function accountPath(uid) { return /databases/$(database)/documents/customerAccounts/$(uid); }
+  match /settings/accountOwner { allow read: if owner(); allow write: if false; }
+  match /customerAccounts/{uid} {
+   allow read: if owner() || (signed() && request.auth.uid == uid);
+   allow create: if signed() && request.auth.uid == uid
+    && request.resource.data.keys().hasAll(['uid','email','businessName','status','expiresAt','countLimit','countsUsed','lastClaimId','createdAt'])
+    && request.resource.data.keys().hasOnly(['uid','email','businessName','status','expiresAt','countLimit','countsUsed','lastClaimId','createdAt'])
+    && request.resource.data.uid == uid && request.resource.data.email == request.auth.token.email
+    && request.resource.data.businessName is string && request.resource.data.businessName.size() > 0 && request.resource.data.businessName.size() <= 100
+    && request.resource.data.status == 'pending' && request.resource.data.expiresAt == 0
+    && request.resource.data.countLimit == 1 && request.resource.data.countsUsed == 0 && request.resource.data.lastClaimId == ''
+    && request.resource.data.createdAt == request.time;
+   allow update: if (owner()
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','expiresAt','updatedAt','countLimit','countsUsed','lastClaimId','number','reopenClaimId','reopenToken','reopenGrantedAt'])
+    && request.resource.data.status in ['pending','active','blocked']
+    && request.resource.data.expiresAt is number && request.resource.data.expiresAt >= 0
+    && request.resource.data.countLimit is int && request.resource.data.countLimit >= resource.data.get('countsUsed', 0)
+    && request.resource.data.countLimit <= 100000
+    && request.resource.data.countsUsed is int && request.resource.data.countsUsed >= 0
+    && request.resource.data.countsUsed <= request.resource.data.countLimit
+    && request.resource.data.lastClaimId == resource.data.get('lastClaimId', '')
+    && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['number']) || (request.resource.data.number is string && request.resource.data.number.size() == 0))
+    && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['reopenClaimId','reopenToken','reopenGrantedAt']) || (
+      request.resource.data.reopenClaimId == resource.data.lastClaimId
+      && request.resource.data.reopenGrantedAt == request.time
+      && request.resource.data.reopenToken is string
+      && request.resource.data.reopenToken.size() > 0 && request.resource.data.reopenToken.size() <= 100
+      && exists(/databases/$(database)/documents/customerAccounts/$(uid)/countClaims/$(request.resource.data.reopenClaimId))))
+    && request.resource.data.updatedAt == request.time)
+    || (signed() && request.auth.uid == uid
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['countsUsed','lastClaimId'])
+    && request.resource.data.countsUsed == resource.data.get('countsUsed', 0) + 1
+    && request.resource.data.countLimit == resource.data.get('countLimit', 0)
+    && request.resource.data.status == 'active' && request.resource.data.expiresAt > request.time.toMillis()
+    && request.resource.data.countsUsed <= request.resource.data.countLimit
+    && request.resource.data.lastClaimId is string && request.resource.data.lastClaimId.size() > 0
+    && existsAfter(/databases/$(database)/documents/customerAccounts/$(uid)/countClaims/$(request.resource.data.lastClaimId))
+    && getAfter(/databases/$(database)/documents/customerAccounts/$(uid)/countClaims/$(request.resource.data.lastClaimId)).data.sessionId == request.resource.data.lastClaimId);
+   allow delete: if false;
+   match /countClaims/{claimId} {
+    allow read: if owner() || (signed() && request.auth.uid == uid);
+    allow create: if signed() && request.auth.uid == uid
+     && request.resource.data.keys().hasOnly(['sessionId','createdAt'])
+     && request.resource.data.sessionId == claimId && request.resource.data.createdAt == request.time
+     && get(accountPath(uid)).data.status == 'active'
+     && get(accountPath(uid)).data.expiresAt > request.time.toMillis()
+     && getAfter(accountPath(uid)).data.countsUsed == get(accountPath(uid)).data.countsUsed + 1
+     && getAfter(accountPath(uid)).data.lastClaimId == claimId
+     && getAfter(accountPath(uid)).data.countsUsed <= getAfter(accountPath(uid)).data.countLimit;
+    allow update, delete: if false;
+   }
+  }
+  match /{document=**} { allow read, write: if false; }
+ }
+}
