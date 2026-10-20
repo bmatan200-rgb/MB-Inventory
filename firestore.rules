@@ -13,7 +13,7 @@ service cloud.firestore {
     && request.resource.data.uid == uid && request.resource.data.email == request.auth.token.email
     && request.resource.data.businessName is string && request.resource.data.businessName.size() > 0 && request.resource.data.businessName.size() <= 100
     && request.resource.data.status == 'pending' && request.resource.data.expiresAt == 0
-    && request.resource.data.countLimit == 0 && request.resource.data.countsUsed == 0 && request.resource.data.lastClaimId == ''
+    && request.resource.data.countLimit == 1 && request.resource.data.countsUsed == 0 && request.resource.data.lastClaimId == ''
     && request.resource.data.createdAt == request.time;
    allow update: if (owner()
     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','expiresAt','updatedAt','countLimit','countsUsed','lastClaimId','number'])
@@ -30,7 +30,7 @@ service cloud.firestore {
     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['countsUsed','lastClaimId'])
     && request.resource.data.countsUsed == resource.data.get('countsUsed', 0) + 1
     && request.resource.data.countLimit == resource.data.get('countLimit', 0)
-    && request.resource.data.status == 'active' && request.resource.data.expiresAt > request.time
+    && request.resource.data.status == 'active' && request.resource.data.expiresAt > request.time.toMillis()
     && request.resource.data.countsUsed <= request.resource.data.countLimit
     && request.resource.data.lastClaimId is string && request.resource.data.lastClaimId.size() > 0
     && existsAfter(/databases/$(database)/documents/customerAccounts/$(uid)/countClaims/$(request.resource.data.lastClaimId))
@@ -42,7 +42,7 @@ service cloud.firestore {
      && request.resource.data.keys().hasOnly(['sessionId','createdAt'])
      && request.resource.data.sessionId == claimId && request.resource.data.createdAt == request.time
      && get(accountPath(uid)).data.status == 'active'
-     && get(accountPath(uid)).data.expiresAt > request.time
+     && get(accountPath(uid)).data.expiresAt > request.time.toMillis()
      && getAfter(accountPath(uid)).data.countsUsed == get(accountPath(uid)).data.countsUsed + 1
      && getAfter(accountPath(uid)).data.lastClaimId == claimId
      && getAfter(accountPath(uid)).data.countsUsed <= getAfter(accountPath(uid)).data.countLimit;
